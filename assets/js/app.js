@@ -30,8 +30,9 @@
     applySavedTheme();
     bindEvents();
     renderLocations();
+    renderLocationCards();
     renderCart();
-    setStatus("Preisliste wird geladen...");
+    setStatus("Preise werden geladen...");
     await loadPriceList();
     refreshIcons();
   }
@@ -69,7 +70,8 @@
       sendWhatsApp: document.getElementById("sendWhatsApp"),
       downloadPdf: document.getElementById("downloadPdf"),
       freeInquiry: document.getElementById("freeInquiry"),
-      freeInquiryButton: document.getElementById("freeInquiryButton")
+      freeInquiryButton: document.getElementById("freeInquiryButton"),
+      locationCards: document.getElementById("locationCards")
     });
   }
 
@@ -106,7 +108,7 @@
   }
 
   async function loadPriceList() {
-    setStatus("Preisliste wird geladen...");
+    setStatus("Preise werden geladen...");
     try {
       const text = await fetchCsv();
       const rows = parseCsv(text);
@@ -114,16 +116,17 @@
 
       state.products = products;
       state.settings = settings;
-      syncSettingsFromSheet(settings);
+      syncSettingsFromPriceList(settings);
       populateFilters(products);
       renderBanner(settings);
       renderProducts();
       renderLocations();
+      renderLocationCards();
       renderCart();
-      setStatus(`Preisliste aktualisiert (${products.length} Artikel).`);
+      setStatus(`Preise aktualisiert (${products.length} Artikel).`);
     } catch (error) {
       console.error(error);
-      setStatus("Preisliste konnte nicht geladen werden. Bitte später erneut versuchen.");
+      setStatus("Preisdaten konnten nicht geladen werden. Bitte später erneut versuchen.");
       els.productList.innerHTML = "";
       els.emptyState.classList.remove("is-hidden");
     }
@@ -131,14 +134,14 @@
 
   async function fetchCsv() {
     const sources = [
-      { label: "Online-Preisliste", url: cacheBust(config.sheetCsvUrl) },
-      { label: "lokaler Fallback", url: config.fallbackCsvUrl }
+      { label: "primary", url: cacheBust(config.priceListUrl) },
+      { label: "secondary", url: config.fallbackPriceListUrl }
     ];
 
     let lastError;
     for (const source of sources) {
       try {
-        const response = await fetch(source.url, { cache: "no-store" });
+        const response = await fetchWithTimeout(source.url, 3500);
         if (!response.ok) {
           throw new Error(`${source.label}: HTTP ${response.status}`);
         }
@@ -149,7 +152,17 @@
       }
     }
 
-    throw lastError || new Error("Keine Datenquelle erreichbar.");
+    throw lastError || new Error("Preisdaten nicht erreichbar.");
+  }
+
+  async function fetchWithTimeout(url, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { cache: "no-store", signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }
 
   function cacheBust(url) {
@@ -279,11 +292,15 @@
     return match ? Number.parseInt(match[1], 10) : 0;
   }
 
-  function syncSettingsFromSheet(settings) {
+  function syncSettingsFromPriceList(settings) {
     config.locations.forEach((location) => {
       const phone = clean(settings[location.whatsappField]);
       const maps = clean(settings[location.mapsField]);
-      if (phone) location.whatsapp = phone;
+      if (phone) {
+        location.whatsapp = phone;
+      } else {
+        delete location.whatsapp;
+      }
       if (maps) location.mapsUrl = maps;
     });
   }
@@ -312,7 +329,7 @@
   function renderBanner(settings) {
     const active = isYes(settings.AngebotsbannerAktiv);
     const text = clean(settings.AngebotsbannerText);
-    const button = clean(settings.AngebotsbannerButton) || "Ansehen";
+    const button = clean(settings.AngebotsbannerButton) || "Jetzt ansehen";
     const target = clean(settings.AngebotsbannerZiel);
     const inDateRange = isInDateRange(settings.AngebotsbannerStart, settings.AngebotsbannerEnde);
 
@@ -325,7 +342,7 @@
     els.promoBanner.classList.remove("is-hidden");
     els.promoBanner.innerHTML = `
       <div>
-        <span class="banner-kicker">Angebot</span>
+        <span class="banner-kicker">B2B-Angebot</span>
         <strong>${escapeHtml(text)}</strong>
       </div>
       ${
@@ -368,7 +385,7 @@
   function renderProducts() {
     const filtered = getFilteredProducts();
     const priced = filtered.filter((product) => product.price !== null).length;
-    const stocked = filtered.filter((product) => isStockLikelyAvailable(product.stock)).length;
+    const stocked = filtered.filter(isOrderableProduct).length;
 
     els.visibleCount.textContent = filtered.length;
     els.pricedCount.textContent = priced;
@@ -436,11 +453,15 @@
     const quantityInCart = cartItem ? cartItem.quantity : 0;
     const priceText = product.price === null ? "Auf Anfrage" : formatMoney(product.price);
     const stockClass = getStockClass(product.stock);
+    const orderable = isOrderableProduct(product);
+    const actionLabel = orderable ? "Hinzufügen" : "Anfragen";
+    const selectedLabel = orderable ? `${quantityInCart} in Auswahl` : `${quantityInCart} angefragt`;
 
     return `
-      <div class="variant-row">
+      <div class="variant-row ${orderable ? "is-orderable" : "is-inquiry"}">
         <div class="variant-info">
           <strong>${escapeHtml(product.group)} · ${escapeHtml(product.quality)}</strong>
+          <span class="variant-type">${orderable ? "Bestellposition" : "Anfrageposition"}</span>
           ${product.note ? `<span>${escapeHtml(product.note)}</span>` : ""}
         </div>
         <div class="product-price">
@@ -452,49 +473,12 @@
             <span>Menge</span>
             <input type="number" min="1" max="99" value="1" inputmode="numeric" data-qty="${escapeHtml(product.id)}">
           </label>
-          <button class="secondary-button add-button" type="button" data-add="${escapeHtml(product.id)}">
-            <i data-lucide="plus" aria-hidden="true"></i>
-            ${quantityInCart ? `${quantityInCart} in Auswahl` : "Hinzufügen"}
+          <button class="${orderable ? "secondary-button" : "secondary-button inquiry-button"} add-button" type="button" data-add="${escapeHtml(product.id)}">
+            <i data-lucide="${orderable ? "plus" : "message-circle"}" aria-hidden="true"></i>
+            ${quantityInCart ? selectedLabel : actionLabel}
           </button>
         </div>
       </div>
-    `;
-  }
-
-  function renderProductCard(product) {
-    const cartItem = state.cart[product.id];
-    const quantityInCart = cartItem ? cartItem.quantity : 0;
-    const priceText = product.price === null ? "Auf Anfrage" : formatMoney(product.price);
-    const stockClass = getStockClass(product.stock);
-
-    return `
-      <article class="product-card">
-        <div class="product-main">
-          <div>
-            <div class="product-meta">
-              <span>${escapeHtml(product.brand)}</span>
-              <span>${escapeHtml(product.group)}</span>
-            </div>
-            <h3>${escapeHtml(product.model)}</h3>
-            <p>${escapeHtml(product.quality)}</p>
-          </div>
-          <div class="product-price">
-            <strong>${escapeHtml(priceText)}</strong>
-            <span class="stock-badge ${stockClass}">${escapeHtml(product.stock)}</span>
-          </div>
-        </div>
-        ${product.note ? `<p class="product-note">${escapeHtml(product.note)}</p>` : ""}
-        <div class="product-actions">
-          <label class="quantity-field">
-            <span>Menge</span>
-            <input type="number" min="1" max="99" value="1" inputmode="numeric" data-qty="${escapeHtml(product.id)}">
-          </label>
-          <button class="secondary-button add-button" type="button" data-add="${escapeHtml(product.id)}">
-            <i data-lucide="plus" aria-hidden="true"></i>
-            ${quantityInCart ? `${quantityInCart} in Auswahl` : "Hinzufügen"}
-          </button>
-        </div>
-      </article>
     `;
   }
 
@@ -527,10 +511,11 @@
   function renderCart() {
     const items = getCartItems();
     const totals = calculateTotals(items);
+    const sections = splitCartItems(items);
 
     els.cartCount.textContent = items.reduce((sum, item) => sum + item.quantity, 0);
     els.cartTotal.textContent = formatMoney(totals.total);
-    els.cartPriceNote.classList.toggle("is-hidden", !totals.hasUnpriced);
+    els.cartPriceNote.classList.toggle("is-hidden", sections.inquiryItems.length === 0);
     els.sendWhatsApp.disabled = items.length === 0;
     els.downloadPdf.disabled = items.length === 0;
 
@@ -539,36 +524,50 @@
       return;
     }
 
-    els.cartLines.innerHTML = items
-      .map(({ product, quantity }) => {
-        const subtotal = product.price === null ? "Auf Anfrage" : formatMoney(product.price * quantity);
-        const unitPrice = product.price === null ? "Auf Anfrage" : formatMoney(product.price);
-        return `
-          <article class="cart-line">
-            <div>
-              <strong>${escapeHtml(product.model)}</strong>
-              <span>${escapeHtml(product.group)} · ${escapeHtml(product.quality)}</span>
-              <small>${escapeHtml(unitPrice)} / Stück</small>
-            </div>
-            <div class="cart-line-actions">
-              <button type="button" class="mini-button" data-decrease="${escapeHtml(product.id)}" aria-label="Menge reduzieren">
-                <i data-lucide="minus" aria-hidden="true"></i>
-              </button>
-              <span>${quantity}</span>
-              <button type="button" class="mini-button" data-increase="${escapeHtml(product.id)}" aria-label="Menge erhöhen">
-                <i data-lucide="plus" aria-hidden="true"></i>
-              </button>
-            </div>
-            <div class="cart-line-total">
-              <strong>${escapeHtml(subtotal)}</strong>
-              <button type="button" class="text-button danger" data-remove="${escapeHtml(product.id)}">Entfernen</button>
-            </div>
-          </article>
-        `;
-      })
-      .join("");
+    els.cartLines.innerHTML = [
+      renderCartSection("Bestellpositionen", sections.orderItems, "order"),
+      renderCartSection("Anfragepositionen", sections.inquiryItems, "inquiry")
+    ].join("");
 
     refreshIcons();
+  }
+
+  function renderCartSection(title, items, type) {
+    if (!items.length) return "";
+    return `
+      <section class="cart-section cart-section-${type}">
+        <h3>${escapeHtml(title)}</h3>
+        ${items.map((item) => renderCartLine(item, type)).join("")}
+      </section>
+    `;
+  }
+
+  function renderCartLine({ product, quantity }, type) {
+    const orderable = type === "order";
+    const subtotal = orderable ? formatMoney(product.price * quantity) : "Anfrage";
+    const unitPrice = product.price === null ? "Preis auf Anfrage" : `${formatMoney(product.price)} / Stück`;
+    return `
+      <article class="cart-line ${orderable ? "cart-line-order" : "cart-line-inquiry"}">
+        <div>
+          <strong>${escapeHtml(product.model)}</strong>
+          <span>${escapeHtml(product.group)} · ${escapeHtml(product.quality)}</span>
+          <small>${escapeHtml(unitPrice)}${orderable ? "" : ` · ${escapeHtml(product.stock)}`}</small>
+        </div>
+        <div class="cart-line-actions">
+          <button type="button" class="mini-button" data-decrease="${escapeHtml(product.id)}" aria-label="Menge reduzieren">
+            <i data-lucide="minus" aria-hidden="true"></i>
+          </button>
+          <span>${quantity}</span>
+          <button type="button" class="mini-button" data-increase="${escapeHtml(product.id)}" aria-label="Menge erhöhen">
+            <i data-lucide="plus" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="cart-line-total">
+          <strong>${escapeHtml(subtotal)}</strong>
+          <button type="button" class="text-button danger" data-remove="${escapeHtml(product.id)}">Entfernen</button>
+        </div>
+      </article>
+    `;
   }
 
   function handleCartClick(event) {
@@ -609,17 +608,31 @@
       .filter(Boolean);
   }
 
+  function splitCartItems(items) {
+    return items.reduce(
+      (groups, item) => {
+        if (isOrderableProduct(item.product)) {
+          groups.orderItems.push(item);
+        } else {
+          groups.inquiryItems.push(item);
+        }
+        return groups;
+      },
+      { orderItems: [], inquiryItems: [] }
+    );
+  }
+
   function calculateTotals(items) {
     return items.reduce(
       (summary, item) => {
-        if (item.product.price === null) {
-          summary.hasUnpriced = true;
-        } else {
+        if (isOrderableProduct(item.product)) {
           summary.total += item.product.price * item.quantity;
+        } else {
+          summary.hasInquiry = true;
         }
         return summary;
       },
-      { total: 0, hasUnpriced: false }
+      { total: 0, hasInquiry: false }
     );
   }
 
@@ -640,46 +653,89 @@
       .join("");
   }
 
+  function renderLocationCards() {
+    if (!els.locationCards) return;
+
+    els.locationCards.innerHTML = config.locations
+      .map((location) => {
+        const mapsUrl = clean(location.mapsUrl);
+        return `
+          <article class="location-card">
+            <div class="location-card-icon">
+              <i data-lucide="map-pin" aria-hidden="true"></i>
+            </div>
+            <div>
+              <h3>tradestation ${escapeHtml(location.city || location.name)}</h3>
+              <p>${escapeHtml(location.city || location.name)}</p>
+              <span>Abholung nach Bestätigung möglich</span>
+            </div>
+            <a class="secondary-button" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener">
+              <i data-lucide="map" aria-hidden="true"></i>
+              Google Maps öffnen
+            </a>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
   function sendOrderToWhatsApp() {
     const items = getCartItems();
     if (!items.length) return;
 
     const message = buildOrderMessage(items);
-    const location = getSelectedLocation();
-    const phone = getLocationPhone(location);
+    const phone = getLocationPhone(getSelectedLocation());
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
   }
 
   function buildOrderMessage(items) {
     const customer = getOrderDetails();
     const totals = calculateTotals(items);
+    const sections = splitCartItems(items);
+    const kind = getRequestKind(sections);
     const lines = [
-      "Hallo, ich möchte folgende Bestellung aufgeben:",
+      "Hallo tradestation Team,",
       "",
+      `ich möchte folgende ${kind} senden:`,
+      "",
+      "Kundendaten:",
       `Name: ${customer.name || "Nicht angegeben"}`,
       `Firma: ${customer.company || "Nicht angegeben"}`,
-      `Standort: ${customer.location}`,
+      ...formatLocationLines(customer.location),
       `Lieferart: ${customer.delivery}`,
-      "",
-      "Bestellung:",
       ""
     ];
 
-    items.forEach(({ product, quantity }) => {
-      const unit = product.price === null ? "Preis auf Anfrage" : formatMoney(product.price);
-      const subtotal = product.price === null ? "auf Anfrage" : formatMoney(product.price * quantity);
-      lines.push(`* ${quantity} x ${product.model} ${product.group} ${product.quality} à ${unit} = ${subtotal}`);
-    });
-
-    lines.push("");
-    lines.push(`Gesamtsumme: ${formatMoney(totals.total)}`);
-    if (totals.hasUnpriced) {
-      lines.push("Hinweis: Einige Artikel sind auf Anfrage und nicht in der Gesamtsumme enthalten.");
+    if (sections.orderItems.length) {
+      lines.push("Bestellpositionen:");
+      sections.orderItems.forEach(({ product, quantity }, index) => {
+        lines.push(`${index + 1}. ${quantity}x ${product.model} · ${product.group} · ${product.quality}`);
+        lines.push(`Einzelpreis: ${formatMoney(product.price)}`);
+        lines.push(`Summe: ${formatMoney(product.price * quantity)}`);
+        lines.push("");
+      });
     }
 
-    lines.push("");
+    if (sections.inquiryItems.length) {
+      lines.push("Anfragepositionen:");
+      sections.inquiryItems.forEach(({ product, quantity }, index) => {
+        lines.push(`${index + 1}. ${quantity}x ${product.model} · ${product.group} · ${product.quality}`);
+        lines.push(`Status: ${product.stock}`);
+        lines.push(`Preis: ${product.price === null ? "auf Anfrage" : formatMoney(product.price)}`);
+        lines.push("");
+      });
+    }
+
+    if (sections.orderItems.length) {
+      lines.push("Gesamtsumme bestellbarer Artikel:");
+      lines.push(formatMoney(totals.total));
+      lines.push("");
+    }
+
     lines.push("Nachricht:");
     lines.push(customer.message || "Keine Nachricht angegeben.");
+    lines.push("");
+    lines.push("Bitte Verfügbarkeit und finale Konditionen bestätigen.");
 
     return lines.join("\n");
   }
@@ -687,104 +743,13 @@
   function createOrderPdf() {
     const items = getCartItems();
     if (!items.length) return;
-
-    if (!window.jspdf || !window.jspdf.jsPDF) {
-      openPrintableSummary(items);
-      return;
-    }
-
-    const customer = getOrderDetails();
-    const totals = calculateTotals(items);
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
-    const margin = 14;
-    let y = 18;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("Bestellzusammenfassung", margin, y);
-
-    y += 8;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`TradeStation Ersatzteile · ${formatDate(new Date())}`, margin, y);
-
-    y += 12;
-    doc.setFont("helvetica", "bold");
-    doc.text("Kundendaten", margin, y);
-    y += 6;
-    doc.setFont("helvetica", "normal");
-    [
-      `Name: ${customer.name || "Nicht angegeben"}`,
-      `Firma: ${customer.company || "Nicht angegeben"}`,
-      `Standort: ${customer.location}`,
-      `Lieferart: ${customer.delivery}`
-    ].forEach((line) => {
-      doc.text(line, margin, y);
-      y += 6;
-    });
-
-    y += 5;
-    doc.setFont("helvetica", "bold");
-    doc.text("Bestellung", margin, y);
-    y += 7;
-
-    doc.setFillColor(238, 243, 239);
-    doc.rect(margin, y - 5, 182, 8, "F");
-    doc.setFontSize(9);
-    doc.text("Artikel", margin + 2, y);
-    doc.text("Menge", 116, y);
-    doc.text("Einzelpreis", 136, y);
-    doc.text("Summe", 170, y);
-    y += 7;
-
-    doc.setFont("helvetica", "normal");
-    items.forEach(({ product, quantity }) => {
-      const article = `${product.model} ${product.group} ${product.quality}`;
-      const lines = doc.splitTextToSize(article, 96);
-      const rowHeight = Math.max(8, lines.length * 5);
-
-      if (y + rowHeight > 275) {
-        doc.addPage();
-        y = 18;
-      }
-
-      doc.text(lines, margin + 2, y);
-      doc.text(String(quantity), 116, y);
-      doc.text(product.price === null ? "Auf Anfrage" : formatMoney(product.price), 136, y);
-      doc.text(product.price === null ? "Auf Anfrage" : formatMoney(product.price * quantity), 170, y);
-      y += rowHeight;
-    });
-
-    y += 4;
-    doc.setDrawColor(205, 214, 209);
-    doc.line(margin, y, 196, y);
-    y += 8;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(`Gesamtsumme: ${formatMoney(totals.total)}`, margin, y);
-
-    if (totals.hasUnpriced) {
-      y += 6;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text("Einige Artikel sind auf Anfrage und nicht in der Gesamtsumme enthalten.", margin, y);
-    }
-
-    if (customer.message) {
-      y += 12;
-      doc.setFont("helvetica", "bold");
-      doc.text("Nachricht", margin, y);
-      y += 6;
-      doc.setFont("helvetica", "normal");
-      doc.text(doc.splitTextToSize(customer.message, 182), margin, y);
-    }
-
-    doc.save(`bestellung-tradestation-${new Date().toISOString().slice(0, 10)}.pdf`);
+    openPrintableSummary(items);
   }
 
   function openPrintableSummary(items) {
-    const message = buildOrderMessage(items).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    const customer = getOrderDetails();
+    const totals = calculateTotals(items);
+    const sections = splitCartItems(items);
     const printWindow = window.open("", "_blank", "noopener");
     if (!printWindow) return;
 
@@ -795,13 +760,74 @@
           <meta charset="utf-8">
           <title>Bestellzusammenfassung</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 32px; color: #17211c; }
-            pre { white-space: pre-wrap; line-height: 1.55; }
+            @page { size: A4; margin: 16mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; color: #17211c; font-family: Arial, sans-serif; line-height: 1.45; }
+            .doc { max-width: 190mm; margin: 0 auto; }
+            .doc-header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; border-bottom: 3px solid #d71920; padding-bottom: 16px; margin-bottom: 18px; }
+            .brand { font-size: 24px; font-weight: 800; letter-spacing: 0; }
+            .brand .trade { color: #d71920; }
+            .brand .station { color: #17211c; }
+            .brand .b2b { color: #66736c; font-size: 14px; }
+            .doc-title { margin: 10px 0 0; font-size: 18px; }
+            .meta { color: #66736c; text-align: right; font-size: 12px; }
+            .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 18px; }
+            .box { border: 1px solid #d9e0da; border-radius: 8px; padding: 12px; }
+            h2 { margin: 0 0 8px; font-size: 14px; }
+            p { margin: 0 0 8px; }
+            table { width: 100%; border-collapse: collapse; margin: 8px 0 18px; font-size: 12px; }
+            th, td { border-bottom: 1px solid #d9e0da; padding: 8px 6px; text-align: left; vertical-align: top; }
+            td small { color: #66736c; }
+            th { background: #f4f6f4; font-size: 11px; text-transform: uppercase; }
+            .num { text-align: right; white-space: nowrap; }
+            .total { display: flex; justify-content: flex-end; gap: 16px; font-size: 16px; font-weight: 800; margin: 8px 0 18px; }
+            .note { border-left: 4px solid #d71920; background: #fff1f1; padding: 10px 12px; }
+            .message { white-space: pre-wrap; }
+            @media print { button { display: none; } .doc { max-width: none; } }
+            @media (max-width: 720px) { body { padding: 14px; } .doc-header, .info-grid { grid-template-columns: 1fr; display: grid; } .meta { text-align: left; } table { font-size: 11px; } }
           </style>
         </head>
         <body>
-          <h1>Bestellzusammenfassung</h1>
-          <pre>${message}</pre>
+          <main class="doc">
+            <header class="doc-header">
+              <div>
+                <div class="brand"><span class="trade">trade</span><span class="station">station</span> <span class="b2b">b2b</span></div>
+                <h1 class="doc-title">Bestellzusammenfassung</h1>
+              </div>
+              <div class="meta">Datum<br><strong>${escapeHtml(formatDate(new Date()))}</strong></div>
+            </header>
+
+            <section class="info-grid">
+              <div class="box">
+                <h2>Kundendaten</h2>
+                <p>Name: ${escapeHtml(customer.name || "Nicht angegeben")}</p>
+                <p>Firma: ${escapeHtml(customer.company || "Nicht angegeben")}</p>
+                ${formatLocationLines(customer.location).map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+                <p>Lieferart: ${escapeHtml(customer.delivery)}</p>
+              </div>
+              <div class="box">
+                <h2>Hinweis</h2>
+                <p>Preise und Verfügbarkeit vorbehaltlich finaler Bestätigung.</p>
+              </div>
+            </section>
+
+            ${renderPrintTable("Bestellpositionen", sections.orderItems, true)}
+            ${renderPrintTable("Anfragepositionen", sections.inquiryItems, false)}
+
+            ${
+              sections.orderItems.length
+                ? `<div class="total">
+                    <span>Gesamtsumme bestellbarer Artikel</span>
+                    <span>${escapeHtml(formatMoney(totals.total))}</span>
+                  </div>`
+                : ""
+            }
+
+            <section class="box">
+              <h2>Nachricht</h2>
+              <p class="message">${escapeHtml(customer.message || "Keine Nachricht angegeben.")}</p>
+            </section>
+          </main>
           <script>window.print();</script>
         </body>
       </html>
@@ -809,17 +835,57 @@
     printWindow.document.close();
   }
 
+  function renderPrintTable(title, items, orderable) {
+    if (!items.length) return "";
+
+    return `
+      <section>
+        <h2>${escapeHtml(title)}</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Menge</th>
+              <th>Artikel</th>
+              <th>Variante</th>
+              <th class="num">Einzelpreis</th>
+              <th class="num">Summe</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items
+              .map(({ product, quantity }) => {
+                const price = product.price === null ? "auf Anfrage" : formatMoney(product.price);
+                const sum = orderable ? formatMoney(product.price * quantity) : "Anfrage";
+                return `
+                  <tr>
+                    <td>${quantity}</td>
+                    <td>${escapeHtml(product.model)}</td>
+                    <td>${escapeHtml(`${product.group} · ${product.quality}`)}${orderable ? "" : `<br><small>Status: ${escapeHtml(product.stock)}</small>`}</td>
+                    <td class="num">${escapeHtml(price)}</td>
+                    <td class="num">${escapeHtml(sum)}</td>
+                  </tr>
+                `;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      </section>
+    `;
+  }
+
   function sendInquiry(rawText) {
     const query = clean(rawText) || "Artikel nicht gefunden";
     const location = getSelectedLocation();
     const phone = getLocationPhone(location);
     const message = [
-      "Hallo, ich habe einen Artikel nicht gefunden und möchte anfragen:",
+      "Hallo tradestation Team,",
+      "",
+      "ich möchte eine Anfrage senden:",
       "",
       `Gesuchter Artikel: ${query}`,
-      `Standort: ${location}`,
+      ...formatLocationLines(location),
       "",
-      "Bitte gebt mir kurz Bescheid, ob der Artikel verfügbar ist."
+      "Bitte Verfügbarkeit und finale Konditionen bestätigen."
     ].join("\n");
 
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
@@ -843,8 +909,30 @@
   }
 
   function getLocationPhone(locationName) {
-    const location = config.locations.find((entry) => entry.name === locationName) || config.locations[0];
+    const location = getLocationEntry(locationName);
     return clean(location.whatsapp || location.fallbackWhatsApp).replace(/\D/g, "");
+  }
+
+  function getLocationEntry(locationName) {
+    return config.locations.find((entry) => entry.name === locationName) || config.locations[0];
+  }
+
+  function locationUsesFallbackPhone(location) {
+    return Boolean(location.fallbackLocationName && !clean(location.whatsapp));
+  }
+
+  function formatLocationLines(locationName) {
+    const location = getLocationEntry(locationName);
+    if (locationUsesFallbackPhone(location)) {
+      return [`Standortwunsch: ${location.name}`];
+    }
+    return [`Standort: ${location.name}`];
+  }
+
+  function getRequestKind(sections) {
+    if (sections.orderItems.length && sections.inquiryItems.length) return "Bestellung + Anfrage";
+    if (sections.orderItems.length) return "Bestellung";
+    return "Anfrage";
   }
 
   function resetFilters() {
@@ -947,16 +1035,28 @@
     return Math.max(0, Math.min(99, number));
   }
 
+  function isOrderableProduct(product) {
+    const stock = normalizeStock(product.stock);
+    return product.price !== null && (stock.includes("viel bestand") || stock.includes("wenig bestand"));
+  }
+
+  function normalizeStock(stock) {
+    return clean(stock)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
   function isStockLikelyAvailable(stock) {
-    const value = stock.toLowerCase();
-    return value.includes("viel") || value.includes("wenig") || value.includes("kürze") || value.includes("kuerze");
+    const value = normalizeStock(stock);
+    return value.includes("viel") || value.includes("wenig");
   }
 
   function getStockClass(stock) {
-    const value = stock.toLowerCase();
+    const value = normalizeStock(stock);
     if (value.includes("viel")) return "stock-good";
     if (value.includes("wenig")) return "stock-low";
-    if (value.includes("kürze") || value.includes("kuerze")) return "stock-soon";
+    if (value.includes("kurze") || value.includes("kuerze")) return "stock-soon";
     return "stock-request";
   }
 

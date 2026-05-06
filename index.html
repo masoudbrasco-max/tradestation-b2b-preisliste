@@ -3,18 +3,17 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="TradeStation Ersatzteile schnell finden und direkt per WhatsApp bestellen.">
-    <title>TradeStation Ersatzteile bestellen</title>
+    <meta name="description" content="tradestation b2b Ersatzteile schnell finden und direkt per WhatsApp bestellen oder anfragen.">
+    <title>tradestation b2b Ersatzteile bestellen</title>
     <link rel="stylesheet" href="assets/css/styles.css">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
     <script src="assets/js/config.js" defer></script>
     <script src="assets/js/app.js" defer></script>
   </head>
   <body>
     <div class="site-shell">
       <header class="site-header">
-        <a class="brand" href="index.html" aria-label="TradeStation Startseite">
+        <a class="brand" href="index.html" aria-label="tradestation b2b Startseite">
           <span>
             <strong class="brand-name"><span>trade</span><span>station</span> <em>b2b</em></strong>
             <small>Ersatzteile bestellen</small>
@@ -24,6 +23,7 @@
         <nav class="top-nav" aria-label="Hauptnavigation">
           <a href="#produkte">Produkte</a>
           <a href="#bestellung">Bestellung</a>
+          <a href="#standorte">Standorte</a>
           <a href="impressum.html">Impressum</a>
         </nav>
 
@@ -41,13 +41,18 @@
       <main>
         <section class="control-band" id="produkte" aria-labelledby="pageTitle">
           <div class="intro-copy">
-            <p class="eyebrow">Live Preisliste</p>
-            <h1 id="pageTitle">Ersatzteile schnell finden und per WhatsApp bestellen.</h1>
-            <p>Suche nach Modell, Qualität oder Artikeltyp und füge passende Teile direkt zur Bestellung hinzu.</p>
+            <p class="eyebrow">B2B Ersatzteilportal</p>
+            <h1 id="pageTitle">Ersatzteile schnell finden, sauber auswählen und direkt abstimmen.</h1>
+            <p>Für Händler, Werkstätten und Wiederverkäufer: Suche nach Modell, Qualität oder Artikeltyp und sende Bestellung oder Anfrage vorbereitet per WhatsApp.</p>
+            <div class="hero-points" aria-label="Vorteile">
+              <span><i data-lucide="scan-search" aria-hidden="true"></i> Schnelle Suche</span>
+              <span><i data-lucide="shopping-bag" aria-hidden="true"></i> Bestellung & Anfrage</span>
+              <span><i data-lucide="map-pin" aria-hidden="true"></i> Drei Standorte</span>
+            </div>
           </div>
 
           <div class="status-panel" aria-live="polite">
-            <span id="dataStatus">Preisliste wird geladen...</span>
+            <span id="dataStatus">Preise werden geladen...</span>
             <button class="text-button" id="reloadData" type="button">
               <i data-lucide="refresh-cw" aria-hidden="true"></i>
               Aktualisieren
@@ -87,10 +92,10 @@
           </div>
         </section>
 
-        <section class="quick-stats" aria-label="Preislistenstatus">
+        <section class="quick-stats" aria-label="Artikelstatus">
           <article>
             <span id="visibleCount">0</span>
-            <small>sichtbare Artikel</small>
+            <small>sichtbare Positionen</small>
           </article>
           <article>
             <span id="pricedCount">0</span>
@@ -98,7 +103,7 @@
           </article>
           <article>
             <span id="stockCount">0</span>
-            <small>sofort oder bald verfügbar</small>
+            <small>direkt bestellbar</small>
           </article>
         </section>
 
@@ -106,8 +111,8 @@
           <section class="products-section" aria-label="Produktliste">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">Preisliste</p>
-                <h2>Artikel</h2>
+                <p class="eyebrow">Artikelübersicht</p>
+                <h2>Produkte</h2>
               </div>
               <span class="muted" id="resultSummary"></span>
             </div>
@@ -127,7 +132,7 @@
           <aside class="order-panel" id="bestellung" aria-label="Bestellung">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">Bestellung</p>
+                <p class="eyebrow">Bestellung & Anfrage</p>
                 <h2>Auswahl</h2>
               </div>
               <button class="icon-button close-cart" id="closeCart" type="button" aria-label="Bestellung schließen">
@@ -140,10 +145,10 @@
             </div>
 
             <div class="cart-total">
-              <span>Gesamtsumme</span>
+              <span>Summe bestellbarer Artikel</span>
               <strong id="cartTotal">0,00 €</strong>
             </div>
-            <p class="cart-note is-hidden" id="cartPriceNote">Einige Artikel sind auf Anfrage und nicht in der Summe enthalten.</p>
+            <p class="cart-note is-hidden" id="cartPriceNote">Anfragepositionen werden separat bestätigt und sind nicht in der Summe enthalten.</p>
 
             <form class="order-form" id="orderForm">
               <label>
@@ -182,11 +187,11 @@
               <div class="order-actions">
                 <button class="primary-button" id="sendWhatsApp" type="button">
                   <i data-lucide="message-circle" aria-hidden="true"></i>
-                  Per WhatsApp bestellen
+                  WhatsApp senden
                 </button>
                 <button class="secondary-button" id="downloadPdf" type="button">
                   <i data-lucide="file-down" aria-hidden="true"></i>
-                  PDF erstellen
+                  PDF / Druck
                 </button>
               </div>
             </form>
@@ -206,10 +211,21 @@
             </button>
           </div>
         </section>
+
+        <section class="locations-section" id="standorte" aria-labelledby="locationsTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Standorte</p>
+              <h2 id="locationsTitle">Unsere Standorte</h2>
+            </div>
+            <p class="muted">Abholung und persönliche Abstimmung an mehreren tradestation Standorten.</p>
+          </div>
+          <div class="location-cards" id="locationCards"></div>
+        </section>
       </main>
 
       <footer class="site-footer">
-        <span>TradeStation Ersatzteil-Bestellung</span>
+        <span>tradestation b2b Ersatzteil-Bestellung</span>
         <nav aria-label="Rechtliches">
           <a href="impressum.html">Impressum</a>
           <a href="datenschutz.html">Datenschutz</a>
