@@ -35,7 +35,7 @@
           <p class="eyebrow">B2B Ersatzteile netto</p>
           <h1 id="pageTitle">Schnelle Preisliste mit WhatsApp-Anfrage</h1>
         </div>
-        <p class="data-status" id="dataStatus">Daten werden geladen...</p>
+        <p class="data-status" id="dataStatus">Preisliste wird geladen...</p>
       </section>
 
       <section class="search-panel" aria-label="Produktsuche">
@@ -85,11 +85,11 @@
         <div class="form-grid">
           <label>
             <span>Firma</span>
-            <input id="companyInput" name="company" autocomplete="organization" required>
+            <input id="companyInput" name="company" autocomplete="organization">
           </label>
           <label>
             <span>Name</span>
-            <input id="nameInput" name="name" autocomplete="name" required>
+            <input id="nameInput" name="name" autocomplete="name">
           </label>
         </div>
 
@@ -117,6 +117,7 @@
         </fieldset>
 
         <a class="fallback-link is-hidden" id="whatsappFallbackLink" target="_blank" rel="noopener">WhatsApp öffnen</a>
+        <p class="form-note is-hidden" id="printNotice"></p>
 
         <div class="checkout__actions">
           <button class="secondary-button" id="orderPdfButton" type="button">PDF erstellen</button>

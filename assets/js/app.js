@@ -45,7 +45,7 @@ async function init() {
   renderLoading();
 
   try {
-    const { text, source } = await loadCsvText();
+    const { text } = await loadCsvText();
     const rows = parseCsv(text);
     const mappedRows = mapRows(rows);
     state.config = readConfig(mappedRows);
@@ -57,7 +57,7 @@ async function init() {
     renderGroupFilters();
     renderProducts();
     renderCart();
-    updateDataStatus(source);
+    updateDataStatus();
     els.priceListPdfButton.disabled = false;
   } catch (error) {
     renderError(error);
@@ -89,6 +89,7 @@ function bindElements() {
     "openCheckoutButton",
     "orderPdfButton",
     "priceListPdfButton",
+    "printNotice",
     "productList",
     "resultCount",
     "searchInput",
@@ -186,12 +187,12 @@ async function loadCsvText() {
 
   try {
     const response = await fetch(liveUrl, { cache: "no-store" });
-    if (!response.ok) throw new Error(`Google Sheets Antwort ${response.status}`);
-    return { text: await response.text(), source: "Google Sheets" };
+    if (!response.ok) throw new Error(`Preisliste Antwort ${response.status}`);
+    return { text: await response.text() };
   } catch (liveError) {
     const fallback = await fetch(FALLBACK_CSV_URL, { cache: "no-store" });
     if (!fallback.ok) throw liveError;
-    return { text: await fallback.text(), source: "lokaler Fallback" };
+    return { text: await fallback.text() };
   }
 }
 
@@ -425,6 +426,7 @@ function renderProductCard(product) {
   const priceText = product.price === null ? "Auf Anfrage" : `${formatEuro(product.price)} netto`;
   const stockClass = getStockClass(product.stock);
   const selectedClass = qty > 0 ? "is-selected" : "";
+  const actionLabel = isDirectOrderProduct(product) ? "Bestellen" : "Anfragen";
 
   return `
     <article class="product-card">
@@ -442,7 +444,7 @@ function renderProductCard(product) {
           <output>${qty}</output>
           <button type="button" data-action="increase" data-id="${escapeAttr(product.id)}" aria-label="Menge erhöhen">+</button>
         </div>
-        <button class="direct-button ${selectedClass}" type="button" data-action="direct" data-id="${escapeAttr(product.id)}">Anfragen</button>
+        <button class="direct-button ${selectedClass}" type="button" data-action="direct" data-id="${escapeAttr(product.id)}">${actionLabel}</button>
       </div>
     </article>
   `;
@@ -451,8 +453,10 @@ function renderProductCard(product) {
 function renderCart() {
   const summary = getCartSummary();
   els.cartCount.textContent = `${summary.count} ${summary.count === 1 ? "Artikel" : "Artikel"}`;
-  els.cartTotal.textContent = summary.unknownCount
+  els.cartTotal.textContent = summary.unknownCount && summary.knownCount
     ? `${formatEuro(summary.total)} bekannte Preise`
+    : summary.unknownCount
+      ? "Preis auf Anfrage"
     : `${formatEuro(summary.total)} netto`;
   els.cartBar.classList.toggle("is-hidden", summary.count === 0);
 }
@@ -468,13 +472,13 @@ function renderCheckout() {
 
   els.checkoutItems.innerHTML = items
     .map(({ product, qty }) => {
-      const line = product.price === null ? "Preis auf Anfrage" : `${formatEuro(product.price * qty)} netto`;
-      const unit = product.price === null ? "Auf Anfrage" : `${formatEuro(product.price)} netto`;
+      const line = isDirectOrderProduct(product) ? `${formatEuro(product.price * qty)} netto` : "Preis auf Anfrage";
+      const unit = isDirectOrderProduct(product) ? `${formatEuro(product.price)} netto` : "Auf Anfrage";
       return `
         <div class="checkout-item">
           <div>
             <strong>${escapeHtml(product.orderLabel)}</strong>
-            <span>${escapeHtml(unit)} · Position: ${escapeHtml(line)}</span>
+            <span class="checkout-item__price">${escapeHtml(unit)} · Position: ${escapeHtml(line)}</span>
           </div>
           <div class="qty-stepper" aria-label="Menge ${escapeAttr(product.orderLabel)}">
             <button type="button" data-action="decrease" data-id="${escapeAttr(product.id)}" aria-label="Menge verringern">-</button>
@@ -487,8 +491,10 @@ function renderCheckout() {
     .join("");
 
   const summary = getCartSummary();
-  els.checkoutTotal.textContent = summary.unknownCount
+  els.checkoutTotal.textContent = summary.unknownCount && summary.knownCount
     ? `${formatEuro(summary.total)} bekannte Preise`
+    : summary.unknownCount
+      ? "Preis auf Anfrage"
     : formatEuro(summary.total);
   updateLocationNotice();
 }
@@ -498,19 +504,18 @@ function renderLoading() {
 }
 
 function renderError(error) {
-  els.dataStatus.textContent = "Daten konnten nicht geladen werden";
+  els.dataStatus.textContent = "Preisliste konnte nicht geladen werden";
   els.productList.innerHTML = `
     <div class="error-state">
-      <strong>Preisliste nicht erreichbar.</strong>
-      <p>Bitte später erneut laden oder die CSV-Freigabe prüfen.</p>
-      <p>${escapeHtml(error.message || "Unbekannter Fehler")}</p>
+      <strong>Preisliste konnte nicht geladen werden.</strong>
+      <p>Bitte später erneut versuchen oder direkt per WhatsApp Kontakt aufnehmen.</p>
     </div>
   `;
 }
 
-function updateDataStatus(source) {
+function updateDataStatus() {
   const count = state.products.length;
-  els.dataStatus.textContent = `${count} aktive Artikel · ${source}`;
+  els.dataStatus.textContent = `Aktuelle Preisliste geladen · ${count} ${count === 1 ? "Artikel" : "Artikel"}`;
 }
 
 function applyFilters() {
@@ -557,6 +562,7 @@ function openCheckout() {
   if (!getCartSummary().count) return;
   renderCheckout();
   els.whatsappFallbackLink.classList.add("is-hidden");
+  els.printNotice.classList.add("is-hidden");
   if (typeof els.checkoutDialog.showModal === "function") {
     els.checkoutDialog.showModal();
   } else {
@@ -626,19 +632,20 @@ function openWhatsapp() {
 
 function buildWhatsappMessage() {
   const order = collectOrderData();
+  const orderMode = getOrderMode(order.items);
   const lines = [
-    "Hallo, ich möchte folgende Bestellung anfragen:",
+    `Hallo, ich möchte folgende ${orderMode} senden:`,
     "",
-    `Firma: ${order.company}`,
-    `Name: ${order.name}`,
+    `Firma: ${formatOptional(order.company)}`,
+    `Name: ${formatOptional(order.name)}`,
     `Standort: ${order.location.label}`,
     "",
-    "Bestellung:",
+    `${orderMode}:`,
     "",
   ];
 
   order.items.forEach(({ product, qty }) => {
-    if (product.price === null) {
+    if (!isDirectOrderProduct(product)) {
       lines.push(`* ${qty}x ${product.orderLabel} - Preis auf Anfrage`);
       return;
     }
@@ -649,12 +656,16 @@ function buildWhatsappMessage() {
   });
 
   lines.push("");
-  if (order.summary.unknownCount) {
-    lines.push(`Gesamtsumme netto bekannte Preise: ${formatEuro(order.summary.total)}`);
+  if (order.summary.unknownCount && order.summary.knownCount) {
+    lines.push(`Gesamtsumme bekannte Preise netto: ${formatEuro(order.summary.total)}`);
     lines.push("Weitere Positionen: Preis auf Anfrage");
+  } else if (order.summary.unknownCount) {
+    lines.push("Gesamtsumme: Preis auf Anfrage");
   } else {
     lines.push(`Gesamtsumme netto: ${formatEuro(order.summary.total)}`);
   }
+
+  lines.push("", "Bitte Verfügbarkeit und finale Konditionen bestätigen.");
 
   if (order.message) {
     lines.push("", "Nachricht:", order.message);
@@ -677,42 +688,49 @@ function collectOrderData() {
 
 function openOrderPdf() {
   const order = collectOrderData();
-  openPrintableDocument("tradestation b2b Bestellung", buildOrderPdfHtml(order));
+  if (!openPrintableDocument("tradestation b2b Bestellung", buildOrderPdfHtml(order))) {
+    showPrintNotice("Das PDF-Fenster wurde blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.");
+  }
 }
 
 function openPriceListPdf() {
-  const products = state.filteredProducts.length ? state.filteredProducts : state.products;
-  openPrintableDocument("tradestation b2b Preisliste", buildPriceListPdfHtml(products));
+  if (!openPrintableDocument("tradestation b2b Preisliste", buildPriceListPdfHtml(state.products))) {
+    showPrintNotice("Das PDF-Fenster wurde blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.");
+  }
 }
 
 function buildOrderPdfHtml(order) {
+  const orderMode = getOrderMode(order.items);
   const rows = order.items
     .map(({ product, qty }) => {
-      const unit = product.price === null ? "Auf Anfrage" : `${formatEuro(product.price)} netto`;
-      const line = product.price === null ? "Auf Anfrage" : `${formatEuro(product.price * qty)} netto`;
+      const unit = isDirectOrderProduct(product) ? `${formatEuro(product.price)} netto` : "Auf Anfrage";
+      const line = isDirectOrderProduct(product) ? `${formatEuro(product.price * qty)} netto` : "Auf Anfrage";
       return `
         <tr>
           <td>${escapeHtml(product.orderLabel)}</td>
           <td class="num">${qty}</td>
-          <td class="num">${escapeHtml(unit)}</td>
-          <td class="num">${escapeHtml(line)}</td>
+          <td class="num money">${escapeHtml(unit)}</td>
+          <td class="num money">${escapeHtml(line)}</td>
         </tr>
       `;
     })
     .join("");
 
-  const totalLabel = order.summary.unknownCount
-    ? `${formatEuro(order.summary.total)} bekannte Preise`
+  const totalLabel = order.summary.unknownCount && order.summary.knownCount
+    ? `${formatEuro(order.summary.total)} bekannte Preise netto`
+    : order.summary.unknownCount
+      ? "Preis auf Anfrage"
     : `${formatEuro(order.summary.total)} netto`;
 
   return `
     <header class="print-header">
       <div class="print-brand"><span>trade</span>station <small>b2b</small></div>
-      <h1>Bestellanfrage</h1>
+      <h1>${escapeHtml(orderMode)}</h1>
+      <p>Preise netto zzgl. gesetzlicher Umsatzsteuer</p>
     </header>
     <section class="print-meta">
-      <p><strong>Firma:</strong> ${escapeHtml(order.company)}</p>
-      <p><strong>Name:</strong> ${escapeHtml(order.name)}</p>
+      <p><strong>Firma:</strong> ${escapeHtml(formatOptional(order.company))}</p>
+      <p><strong>Name:</strong> ${escapeHtml(formatOptional(order.name))}</p>
       <p><strong>Standort:</strong> ${escapeHtml(order.location.label)}</p>
       <p><strong>Datum:</strong> ${formatDate(order.date)}</p>
     </section>
@@ -728,8 +746,8 @@ function buildOrderPdfHtml(order) {
       <tbody>${rows}</tbody>
       <tfoot>
         <tr>
-          <td colspan="3">Gesamtsumme netto</td>
-          <td class="num">${escapeHtml(totalLabel)}</td>
+          <td colspan="3">Gesamtsumme</td>
+          <td class="num money">${escapeHtml(totalLabel)}</td>
         </tr>
       </tfoot>
     </table>
@@ -750,7 +768,7 @@ function buildPriceListPdfHtml(products) {
           <tr>
             <td>${escapeHtml(product.cardTitle)}</td>
             <td>${escapeHtml(product.stock || "-")}</td>
-            <td class="num">${escapeHtml(product.price === null ? "Auf Anfrage" : `${formatEuro(product.price)} netto`)}</td>
+            <td class="num money">${escapeHtml(product.price === null ? "Auf Anfrage" : `${formatEuro(product.price)} netto`)}</td>
           </tr>
         `)
         .join("");
@@ -777,15 +795,20 @@ function buildPriceListPdfHtml(products) {
     <header class="print-header">
       <div class="print-brand"><span>trade</span>station <small>b2b</small></div>
       <h1>Preisliste</h1>
-      <p>Stand: ${formatDate(new Date())} · Preise netto zzgl. gesetzlicher Umsatzsteuer</p>
+      <p>Stand: ${formatDate(new Date())} · Preise netto zzgl. gesetzlicher Umsatzsteuer · ${products.length} Artikel</p>
     </header>
     ${groupsHtml}
   `;
 }
 
 function openPrintableDocument(title, contentHtml) {
-  const printWindow = window.open("", "_blank", "noopener");
+  const printWindow = window.open("", "_blank");
   if (!printWindow) return false;
+  try {
+    printWindow.opener = null;
+  } catch (error) {
+    // Some browsers disallow clearing opener on a just-opened print window.
+  }
 
   printWindow.document.open();
   printWindow.document.write(`
@@ -800,23 +823,23 @@ function openPrintableDocument(title, contentHtml) {
             margin: 0;
             color: #111;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 12px;
-            line-height: 1.4;
+            font-size: 11px;
+            line-height: 1.28;
           }
           .print-page {
-            width: min(100%, 920px);
+            width: min(100%, 880px);
             margin: 0 auto;
-            padding: 28px;
+            padding: 22px;
           }
           .print-header {
             border-bottom: 2px solid #111;
-            padding-bottom: 16px;
-            margin-bottom: 18px;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
           }
           .print-brand {
-            font-size: 22px;
+            font-size: 21px;
             font-weight: 900;
-            margin-bottom: 12px;
+            margin-bottom: 7px;
           }
           .print-brand span { color: #df1f2d; }
           .print-brand small {
@@ -826,18 +849,18 @@ function openPrintableDocument(title, contentHtml) {
           }
           h1 {
             margin: 0;
-            font-size: 24px;
+            font-size: 21px;
           }
           h2 {
-            margin: 20px 0 8px;
-            font-size: 15px;
+            margin: 12px 0 5px;
+            font-size: 13px;
           }
-          p { margin: 0 0 6px; }
+          p { margin: 0 0 4px; }
           .print-meta {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 4px 18px;
-            margin-bottom: 18px;
+            margin-bottom: 12px;
           }
           table {
             width: 100%;
@@ -848,13 +871,13 @@ function openPrintableDocument(title, contentHtml) {
           th,
           td {
             border-bottom: 1px solid #ddd;
-            padding: 8px 6px;
+            padding: 5px 6px;
             text-align: left;
             vertical-align: top;
           }
           th {
             background: #f3f3f3;
-            font-size: 11px;
+            font-size: 10px;
             text-transform: uppercase;
           }
           tfoot td {
@@ -862,13 +885,14 @@ function openPrintableDocument(title, contentHtml) {
             border-top: 2px solid #111;
           }
           .num { text-align: right; white-space: nowrap; }
+          .money { font-weight: 700; }
           .price-group { page-break-inside: avoid; }
           .print-note {
-            margin-top: 18px;
-            padding-top: 12px;
+            margin-top: 12px;
+            padding-top: 10px;
             border-top: 1px solid #ddd;
           }
-          @page { margin: 14mm; }
+          @page { margin: 10mm; }
           @media print {
             .print-page { width: auto; padding: 0; }
           }
@@ -877,13 +901,31 @@ function openPrintableDocument(title, contentHtml) {
       <body>
         <main class="print-page">${contentHtml}</main>
         <script>
-          window.addEventListener("load", () => setTimeout(() => window.print(), 200));
+          window.addEventListener("load", () => {
+            setTimeout(() => {
+              try {
+                window.focus();
+                window.print();
+              } catch (error) {
+                document.body.insertAdjacentHTML("afterbegin", "<p style='padding:12px;background:#fff3cd;border:1px solid #ffe08a'>Druckdialog konnte nicht automatisch geöffnet werden. Bitte Strg+P verwenden.</p>");
+              }
+            }, 250);
+          });
         </script>
       </body>
     </html>
   `);
   printWindow.document.close();
   return true;
+}
+
+function showPrintNotice(message) {
+  if (els.printNotice && els.checkoutDialog?.open) {
+    els.printNotice.textContent = message;
+    els.printNotice.classList.remove("is-hidden");
+  } else {
+    alert(message);
+  }
 }
 
 function getCartItems() {
@@ -900,43 +942,54 @@ function getCartSummary() {
   return getCartItems().reduce(
     (summary, { product, qty }) => {
       summary.count += qty;
-      if (product.price === null) {
+      if (!isDirectOrderProduct(product)) {
         summary.unknownCount += 1;
       } else {
+        summary.knownCount += 1;
         summary.total += product.price * qty;
       }
       return summary;
     },
-    { count: 0, total: 0, unknownCount: 0 },
+    { count: 0, total: 0, knownCount: 0, unknownCount: 0 },
   );
 }
 
+function isDirectOrderProduct(product) {
+  if (product.price === null) return false;
+  const stock = normalizeText(product.stock);
+  return stock.includes("viel bestand") || stock.includes("wenig bestand");
+}
+
+function getOrderMode(items) {
+  const hasDirect = items.some(({ product }) => isDirectOrderProduct(product));
+  const hasInquiry = items.some(({ product }) => !isDirectOrderProduct(product));
+  if (hasDirect && hasInquiry) return "Bestellung / Anfrage";
+  return hasDirect ? "Bestellung" : "Anfrage";
+}
+
+function formatOptional(value) {
+  return value || "nicht angegeben";
+}
+
 function buildCardTitle(product) {
-  const titleParts = [];
-  if (product.quality && normalizeText(product.quality) !== normalizeText(product.group)) {
-    titleParts.push(product.quality);
-  }
-  if (shouldAppendGroup(product.quality, product.group)) titleParts.push(product.group);
-  return titleParts.join(" ");
+  return buildProductTypeLabel(product);
 }
 
 function buildOrderLabel(product) {
-  const labelParts = [product.model];
-  if (product.quality && normalizeText(product.quality) !== normalizeText(product.group)) {
-    labelParts.push(product.quality);
-  }
-  if (shouldAppendGroup(product.quality, product.group)) labelParts.push(product.group);
+  const labelParts = [product.model, buildProductTypeLabel(product)];
   return labelParts.join(" ");
 }
 
-function shouldAppendGroup(quality, group) {
-  if (!group) return false;
-  if (!quality) return true;
+function buildProductTypeLabel(product) {
+  const quality = product.quality.trim();
+  const group = product.group.trim();
+  if (!quality) return group || "Artikel";
+  if (!group) return quality;
 
   const normalizedQuality = normalizeText(quality);
   const normalizedGroup = normalizeText(group);
-  if (normalizedQuality === normalizedGroup) return false;
-  return !normalizedQuality.endsWith(normalizedGroup);
+  if (normalizedQuality === normalizedGroup || normalizedQuality.endsWith(normalizedGroup)) return quality;
+  return `${quality} ${group}`;
 }
 
 function parsePrice(value) {

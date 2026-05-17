@@ -440,6 +440,11 @@ h1 {
 .chip--price {
   color: var(--text);
   background: var(--surface-soft);
+  min-height: 34px;
+  padding: 5px 11px;
+  font-size: 1.05rem;
+  font-weight: 900;
+  border-color: rgba(17, 17, 17, 0.18);
 }
 
 .chip--success {
@@ -634,6 +639,12 @@ h1 {
   font-weight: 800;
 }
 
+.checkout-item .checkout-item__price {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 .checkout__total {
   display: flex;
   align-items: center;
@@ -821,6 +832,10 @@ h1 {
   .product-card {
     grid-template-columns: 1fr 260px;
     align-items: center;
+  }
+
+  .chip--price {
+    font-size: 1rem;
   }
 
   .cart-bar {
