@@ -3,237 +3,139 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="tradestation b2b Ersatzteile schnell finden und direkt per WhatsApp bestellen oder anfragen.">
-    <title>tradestation b2b Ersatzteile bestellen</title>
+    <meta name="theme-color" content="#111111">
+    <title>tradestation b2b | Handy-Ersatzteile</title>
+    <meta name="description" content="Aktuelle B2B-Preisliste fuer Handy-Ersatzteile mit schneller WhatsApp-Anfrage.">
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="assets/css/styles.css">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="assets/js/config.js" defer></script>
-    <script src="assets/js/app.js" defer></script>
   </head>
   <body>
-    <div class="site-shell">
-      <header class="site-header">
-        <a class="brand" href="index.html" aria-label="tradestation b2b Startseite">
-          <span>
-            <strong class="brand-name"><span>trade</span><span>station</span> <em>b2b</em></strong>
-            <small>Ersatzteile bestellen</small>
-          </span>
-        </a>
-
-        <nav class="top-nav" aria-label="Hauptnavigation">
-          <a href="#produkte">Produkte</a>
-          <a href="#bestellung">Bestellung</a>
-          <a href="#standorte">Standorte</a>
-          <a href="impressum.html">Impressum</a>
-        </nav>
-
-        <div class="header-actions">
-          <button class="icon-button" id="themeToggle" type="button" aria-label="Darstellung wechseln">
-            <i data-lucide="sun-medium" aria-hidden="true"></i>
-          </button>
-          <button class="cart-pill" id="openCart" type="button" aria-label="Bestellung anzeigen">
-            <i data-lucide="shopping-bag" aria-hidden="true"></i>
-            <span id="cartCount">0</span>
-          </button>
-        </div>
-      </header>
-
-      <main>
-        <section class="control-band" id="produkte" aria-labelledby="pageTitle">
-          <div class="intro-copy">
-            <p class="eyebrow">B2B Ersatzteilportal</p>
-            <h1 id="pageTitle">Ersatzteile schnell finden, sauber auswählen und direkt abstimmen.</h1>
-            <p>Für Händler, Werkstätten und Wiederverkäufer: Suche nach Modell, Qualität oder Artikeltyp und sende Bestellung oder Anfrage vorbereitet per WhatsApp.</p>
-            <div class="hero-points" aria-label="Vorteile">
-              <span><i data-lucide="scan-search" aria-hidden="true"></i> Schnelle Suche</span>
-              <span><i data-lucide="shopping-bag" aria-hidden="true"></i> Bestellung & Anfrage</span>
-              <span><i data-lucide="map-pin" aria-hidden="true"></i> Drei Standorte</span>
-            </div>
-          </div>
-
-          <div class="status-panel" aria-live="polite">
-            <span id="dataStatus">Preise werden geladen...</span>
-            <button class="text-button" id="reloadData" type="button">
-              <i data-lucide="refresh-cw" aria-hidden="true"></i>
-              Aktualisieren
-            </button>
-          </div>
-        </section>
-
-        <section class="promo-banner is-hidden" id="promoBanner" aria-label="Aktueller Hinweis"></section>
-
-        <section class="search-panel" aria-label="Produktsuche und Filter">
-          <label class="search-field" for="searchInput">
-            <i data-lucide="search" aria-hidden="true"></i>
-            <input id="searchInput" type="search" autocomplete="off" placeholder="Modell, Qualität oder Artikel suchen">
-          </label>
-
-          <div class="filters">
-            <label>
-              <span>Kategorie</span>
-              <select id="categoryFilter"></select>
-            </label>
-            <label>
-              <span>Modell</span>
-              <select id="modelFilter"></select>
-            </label>
-            <label>
-              <span>Artikeltyp</span>
-              <select id="groupFilter"></select>
-            </label>
-            <label>
-              <span>Qualität</span>
-              <select id="qualityFilter"></select>
-            </label>
-            <button class="secondary-button" id="resetFilters" type="button">
-              <i data-lucide="x" aria-hidden="true"></i>
-              Filter löschen
-            </button>
-          </div>
-        </section>
-
-        <section class="quick-stats" aria-label="Artikelstatus">
-          <article>
-            <span id="visibleCount">0</span>
-            <small>sichtbare Positionen</small>
-          </article>
-          <article>
-            <span id="pricedCount">0</span>
-            <small>mit Preis</small>
-          </article>
-          <article>
-            <span id="stockCount">0</span>
-            <small>direkt bestellbar</small>
-          </article>
-        </section>
-
-        <div class="app-layout">
-          <section class="products-section" aria-label="Produktliste">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">Artikelübersicht</p>
-                <h2>Produkte</h2>
-              </div>
-              <span class="muted" id="resultSummary"></span>
-            </div>
-
-            <div class="empty-state is-hidden" id="emptyState">
-              <h3>Artikel nicht gefunden?</h3>
-              <p>Schick uns deine Anfrage direkt per WhatsApp. Die aktuelle Suche wird automatisch übernommen.</p>
-              <button class="primary-button" id="notFoundWhatsApp" type="button">
-                <i data-lucide="message-circle" aria-hidden="true"></i>
-                WhatsApp Anfrage
-              </button>
-            </div>
-
-            <div class="product-list" id="productList"></div>
-          </section>
-
-          <aside class="order-panel" id="bestellung" aria-label="Bestellung">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">Bestellung & Anfrage</p>
-                <h2>Auswahl</h2>
-              </div>
-              <button class="icon-button close-cart" id="closeCart" type="button" aria-label="Bestellung schließen">
-                <i data-lucide="x" aria-hidden="true"></i>
-              </button>
-            </div>
-
-            <div class="cart-lines" id="cartLines">
-              <p class="muted">Noch keine Artikel ausgewählt.</p>
-            </div>
-
-            <div class="cart-total">
-              <span>Summe bestellbarer Artikel</span>
-              <strong id="cartTotal">0,00 €</strong>
-            </div>
-            <p class="cart-note is-hidden" id="cartPriceNote">Anfragepositionen werden separat bestätigt und sind nicht in der Summe enthalten.</p>
-
-            <form class="order-form" id="orderForm">
-              <label>
-                <span>Name</span>
-                <input id="customerName" name="name" type="text" autocomplete="name" placeholder="Max Mustermann">
-              </label>
-              <label>
-                <span>Firma</span>
-                <input id="customerCompany" name="company" type="text" autocomplete="organization" placeholder="Firma">
-              </label>
-
-              <fieldset>
-                <legend>Standort</legend>
-                <div class="segmented" id="locationOptions"></div>
-              </fieldset>
-
-              <fieldset>
-                <legend>Lieferart</legend>
-                <div class="segmented">
-                  <label>
-                    <input type="radio" name="delivery" value="Abholung" checked>
-                    <span>Abholung</span>
-                  </label>
-                  <label>
-                    <input type="radio" name="delivery" value="Lieferung / Versand">
-                    <span>Lieferung / Versand</span>
-                  </label>
-                </div>
-              </fieldset>
-
-              <label>
-                <span>Nachricht</span>
-                <textarea id="customerMessage" name="message" rows="4" placeholder="Bitte reservieren / ich komme morgen vorbei."></textarea>
-              </label>
-
-              <div class="order-actions">
-                <button class="primary-button" id="sendWhatsApp" type="button">
-                  <i data-lucide="message-circle" aria-hidden="true"></i>
-                  WhatsApp senden
-                </button>
-                <button class="secondary-button" id="downloadPdf" type="button">
-                  <i data-lucide="file-down" aria-hidden="true"></i>
-                  PDF / Druck
-                </button>
-              </div>
-            </form>
-          </aside>
-        </div>
-
-        <section class="inquiry-band" aria-label="Freie Anfrage">
-          <div>
-            <p class="eyebrow">Nicht gefunden?</p>
-            <h2>Schreib uns direkt, was du brauchst.</h2>
-          </div>
-          <div class="inquiry-actions">
-            <input id="freeInquiry" type="text" placeholder="z. B. iPhone 14 Pro Kamera">
-            <button class="secondary-button" id="freeInquiryButton" type="button">
-              <i data-lucide="send" aria-hidden="true"></i>
-              Anfrage senden
-            </button>
-          </div>
-        </section>
-
-        <section class="locations-section" id="standorte" aria-labelledby="locationsTitle">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Standorte</p>
-              <h2 id="locationsTitle">Unsere Standorte</h2>
-            </div>
-            <p class="muted">Abholung und persönliche Abstimmung an mehreren tradestation Standorten.</p>
-          </div>
-          <div class="location-cards" id="locationCards"></div>
-        </section>
-      </main>
-
-      <footer class="site-footer">
-        <span>tradestation b2b Ersatzteil-Bestellung</span>
-        <nav aria-label="Rechtliches">
-          <a href="impressum.html">Impressum</a>
-          <a href="datenschutz.html">Datenschutz</a>
-          <a href="agb.html">AGB</a>
-        </nav>
-      </footer>
+    <div class="top-banner is-hidden" id="offerBanner">
+      <button class="top-banner__button" id="offerBannerButton" type="button">
+        <span id="offerBannerText"></span>
+        <span class="top-banner__cta" id="offerBannerCta"></span>
+      </button>
     </div>
 
-    <div class="cart-backdrop" id="cartBackdrop" hidden></div>
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="tradestation b2b Startseite">
+        <span class="brand__mark" aria-hidden="true">ts</span>
+        <span class="brand__text"><span class="brand__trade">trade</span><span class="brand__station">station</span></span>
+        <span class="brand__b2b">b2b</span>
+      </a>
+      <button class="header-action" id="priceListPdfButton" type="button" disabled>
+        <span aria-hidden="true">PDF</span>
+        <span>Preisliste</span>
+      </button>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero-strip" aria-labelledby="pageTitle">
+        <div>
+          <p class="eyebrow">B2B Ersatzteile netto</p>
+          <h1 id="pageTitle">Schnelle Preisliste mit WhatsApp-Anfrage</h1>
+        </div>
+        <p class="data-status" id="dataStatus">Daten werden geladen...</p>
+      </section>
+
+      <section class="search-panel" aria-label="Produktsuche">
+        <div class="search-field">
+          <label class="search-field__control" for="searchInput">
+            <span class="search-field__label">Suche</span>
+            <input id="searchInput" type="search" inputmode="search" autocomplete="off" placeholder="iPhone 13, Akku, Soft OLED...">
+          </label>
+          <button class="search-field__clear" id="clearSearchButton" type="button" aria-label="Suche leeren">x</button>
+        </div>
+        <div class="filter-row" id="groupFilters" role="list" aria-label="Artikelgruppe"></div>
+      </section>
+
+      <section class="catalog-meta" aria-live="polite">
+        <span id="resultCount">0 Artikel</span>
+        <span id="activeFilterLabel">Alle Gruppen</span>
+      </section>
+
+      <section class="product-list" id="productList" aria-live="polite"></section>
+    </main>
+
+    <aside class="cart-bar is-hidden" id="cartBar" aria-live="polite">
+      <div>
+        <strong id="cartCount">0 Artikel</strong>
+        <span id="cartTotal">0 € netto</span>
+      </div>
+      <button class="primary-button" id="openCheckoutButton" type="button">Anfrage senden</button>
+    </aside>
+
+    <dialog class="checkout-dialog" id="checkoutDialog">
+      <form class="checkout" id="checkoutForm" method="dialog">
+        <div class="checkout__head">
+          <div>
+            <p class="eyebrow">WhatsApp-Anfrage</p>
+            <h2>Bestellung vorbereiten</h2>
+          </div>
+          <button class="icon-button" id="closeCheckoutButton" type="button" aria-label="Fenster schliessen">x</button>
+        </div>
+
+        <div class="checkout__items" id="checkoutItems"></div>
+
+        <div class="checkout__total">
+          <span>Gesamtsumme netto</span>
+          <strong id="checkoutTotal">0 €</strong>
+        </div>
+
+        <div class="form-grid">
+          <label>
+            <span>Firma</span>
+            <input id="companyInput" name="company" autocomplete="organization" required>
+          </label>
+          <label>
+            <span>Name</span>
+            <input id="nameInput" name="name" autocomplete="name" required>
+          </label>
+        </div>
+
+        <fieldset class="location-fieldset">
+          <legend>Standort</legend>
+          <div class="location-grid" id="locationOptions"></div>
+          <p class="form-note is-hidden" id="locationNotice"></p>
+        </fieldset>
+
+        <label class="message-field">
+          <span>Nachricht optional</span>
+          <textarea id="customerMessageInput" name="customerMessage" rows="3" placeholder="z. B. bitte Verfügbarkeit bestätigen"></textarea>
+        </label>
+
+        <fieldset class="send-mode">
+          <legend>Ausgabe</legend>
+          <label>
+            <input type="radio" name="sendMode" value="whatsapp" checked>
+            <span>Nur WhatsApp</span>
+          </label>
+          <label>
+            <input type="radio" name="sendMode" value="whatsapp-pdf">
+            <span>WhatsApp + PDF</span>
+          </label>
+        </fieldset>
+
+        <a class="fallback-link is-hidden" id="whatsappFallbackLink" target="_blank" rel="noopener">WhatsApp öffnen</a>
+
+        <div class="checkout__actions">
+          <button class="secondary-button" id="orderPdfButton" type="button">PDF erstellen</button>
+          <button class="primary-button primary-button--whatsapp" id="sendWhatsappButton" type="submit">WhatsApp senden</button>
+        </div>
+      </form>
+    </dialog>
+
+    <footer class="site-footer">
+      <a href="impressum.html">Impressum</a>
+      <a href="datenschutz.html">Datenschutz</a>
+      <a href="agb.html">AGB</a>
+      <span>Preise netto zzgl. gesetzlicher Umsatzsteuer</span>
+    </footer>
+
+    <noscript>
+      <p class="noscript">Bitte JavaScript aktivieren, damit die aktuelle Preisliste geladen werden kann.</p>
+    </noscript>
+
+    <script src="assets/js/app.js" defer></script>
   </body>
 </html>

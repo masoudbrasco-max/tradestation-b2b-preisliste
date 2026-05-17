@@ -1,20 +1,8 @@
-# TradeStation Ersatzteil-Bestellung
+# tradestation b2b
 
-Moderne statische Bestell-Website für GitHub Pages. Die App lädt die Preisliste dynamisch aus einer veröffentlichten Google-Sheets-CSV und nutzt `data/preisliste.csv` als lokalen Fallback.
+Mobile-first Bestellseite fuer Handy-Ersatzteile. Die Seite ist statisch aufgebaut und eignet sich direkt fuer GitHub Pages.
 
-## Funktionen
-
-- Live-Suche nach Modell, Qualität, Artikeltyp, Bestand und Hinweis
-- Filter nach Kategorie, Modell, Artikeltyp und Qualität
-- Warenkorb-ähnliche Auswahl mit Mengen
-- WhatsApp-Bestellung mit Einzelpreisen, Positionssummen und Gesamtsumme
-- Standortlogik für Offenbach und Kassel
-- PDF-Bestellzusammenfassung im Browser
-- Dark-/Light-Mode mit Speicherung
-- Angebotsbanner über Google-Sheets-Konfigurationszeile
-- Rechtliche Seiten: Impressum, Datenschutz, AGB
-
-## Projektstruktur
+## Struktur
 
 ```text
 .
@@ -24,81 +12,73 @@ Moderne statische Bestell-Website für GitHub Pages. Die App lädt die Preislist
 ├── agb.html
 ├── assets/
 │   ├── css/styles.css
-│   └── js/
-│       ├── app.js
-│       └── config.js
-└── data/preisliste.csv
+│   ├── js/app.js
+│   └── img/favicon.svg
+├── data/preisliste.csv
+└── tools/dev-server.ps1
 ```
 
-## Google-Sheets-Anbindung
+## CSV-Daten
 
-Die Datenquelle steht in `assets/js/config.js`:
+Die Website laedt zuerst live diese Google-Sheets-CSV:
 
-```js
-sheetCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vS2R3O4d67rRnfVkau6dRZlFxdjttwUsLDbNBVgaCU5dHWaNdQhYLcW1i1qw5xhCQ/pub?gid=1018114951&single=true&output=csv"
+```text
+https://docs.google.com/spreadsheets/d/e/2PACX-1vS2R3O4d67rRnfVkau6dRZlFxdjttwUsLDbNBVgaCU5dHWaNdQhYLcW1i1qw5xhCQ/pub?gid=1018114951&single=true&output=csv
 ```
 
-Die Website erwartet diese Spalten:
+Erkannte Spalten:
 
-- `Kategorie`
-- `Marke`
-- `Modell`
-- `Artikelgruppe`
-- `QualitaetVariante`
-- `Preis`
-- `BestandStatus`
-- `Angebotsartikel`
-- `Hinweis`
-- `Aktiv`
-- `Sortierung`
+- Produktdaten: `Kategorie`, `Marke`, `Modell`, `Artikelgruppe`, `QualitaetVariante`, `Preis`, `BestandStatus`, `Angebotsartikel`, `Hinweis`, `Aktiv`, `Sortierung`
+- Banner: `AngebotsbannerAktiv`, `AngebotsbannerText`, `AngebotsbannerButton`, `AngebotsbannerZiel`, `AngebotsbannerStart`, `AngebotsbannerEnde`
+- Standorte: `WhatsAppOffenbach`, `WhatsAppKassel`, `WhatsAppGoettingen`, `StandortOffenbachGoogleMaps`, `StandortKasselGoogleMaps`, `StandortGoettingenGoogleMaps`
 
-Die erste Konfigurationszeile kann zusätzlich Banner, WhatsApp-Nummern und Maps-Links enthalten:
+Die erste Datenzeile dient als Konfiguration fuer Banner, WhatsApp-Nummern und Kartenlinks. Alle aktiven Artikel mit `Aktiv = Ja` werden automatisch angezeigt.
 
-- `AngebotsbannerAktiv`
-- `AngebotsbannerText`
-- `AngebotsbannerButton`
-- `AngebotsbannerZiel`
-- `WhatsAppOffenbach`
-- `WhatsAppKassel`
-- `StandortOffenbachGoogleMaps`
-- `StandortKasselGoogleMaps`
+`data/preisliste.csv` ist nur ein lokaler Fallback, falls Google Sheets kurz nicht erreichbar ist. Neue Artikel erscheinen automatisch, sobald sie im Google Sheet aktiv gesetzt sind.
 
-## Banner ändern
+## Banner aendern
 
-In Google Sheets:
+Im Google Sheet:
 
-1. `AngebotsbannerAktiv` auf `Ja` setzen.
-2. `AngebotsbannerText` befüllen.
-3. Optional `AngebotsbannerButton` und `AngebotsbannerZiel` befüllen.
+- `AngebotsbannerAktiv` auf `Ja` setzen
+- `AngebotsbannerText` eintragen
+- optional `AngebotsbannerButton` und `AngebotsbannerZiel` setzen
 
-Wenn `AngebotsbannerZiel` ein Text ist, wird er als Suche übernommen. Wenn es eine URL ist, wird sie geöffnet.
+Wenn `AngebotsbannerZiel` z. B. `iPhone 17 Pro` ist, filtert ein Tap auf den Banner direkt danach.
 
-## Produktlogik
+## WhatsApp-Nummern
 
-Die App blendet zusätzlich zur Tabellenpflege ungültige Kombinationen aus:
+Die Nummern werden aus der CSV gelesen:
 
-- OLED-Displays nicht für iPhone 8, iPhone 8 Plus, iPhone XR und iPhone 11
-- Diagnostic Akkus nur ab iPhone 12
+- Offenbach: `WhatsAppOffenbach`
+- Kassel: `WhatsAppKassel`
+- Goettingen: `WhatsAppGoettingen`
 
-## GitHub Pages Deployment
+Ist fuer Goettingen noch keine Nummer hinterlegt, bleibt der Standort sichtbar, WhatsApp-Senden wird fuer diesen Standort aber sauber blockiert.
 
-1. Neues GitHub-Repository erstellen.
-2. Alle Dateien aus diesem Ordner in das Repository hochladen.
-3. In GitHub auf `Settings` → `Pages` gehen.
-4. Bei `Build and deployment` die Quelle `Deploy from a branch` wählen.
-5. Branch `main` und Ordner `/root` auswählen.
-6. Speichern und die angezeigte GitHub-Pages-URL öffnen.
+## Lokal testen
 
-## Lokale Vorschau
-
-Direktes Öffnen der `index.html` kann den CSV-Import blockieren. Für eine lokale Vorschau:
+Ein einfacher lokaler Server reicht, zum Beispiel:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/dev-server.ps1 -Port 4173
+.\tools\dev-server.ps1 -Port 4173 -Root .
 ```
 
-Danach `http://127.0.0.1:4173/` öffnen.
+Dann im Browser oeffnen:
+
+```text
+http://127.0.0.1:4173/
+```
+
+## GitHub Pages veroeffentlichen
+
+1. Neues GitHub-Repository anlegen.
+2. Alle Dateien aus diesem Ordner in das Repository hochladen.
+3. In GitHub zu `Settings` -> `Pages` gehen.
+4. Unter `Build and deployment` die Quelle `Deploy from a branch` waehlen.
+5. Branch `main` und Ordner `/root` auswaehlen.
+6. Speichern. Nach kurzer Zeit zeigt GitHub die Pages-URL an.
 
 ## Rechtliches
 
-`impressum.html`, `datenschutz.html` und `agb.html` enthalten technische Platzhalter. Vor Veröffentlichung bitte echte Unternehmensdaten und rechtlich geprüfte Texte einsetzen.
+Impressum, Datenschutz und B2B-Bestellhinweise sind vorbereitet. Vor Livegang bitte mindestens E-Mail-Adresse, korrekte steuerliche Bezeichnung und finalen Rechtstext pruefen.
